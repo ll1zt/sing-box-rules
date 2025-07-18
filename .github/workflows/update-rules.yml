@@ -1,0 +1,105 @@
+name: Update Rule Sets
+
+on:
+  schedule:
+    # 每天凌晨5点(UTC)运行，相当于北京时间下午1点
+    # 如果要北京时间凌晨5点，应该设置为21:00 UTC
+    - cron: "0 21 * * *" # 北京时间凌晨5点
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+          cache: false
+
+      - name: Install sing-box
+        run: |
+          SING_BOX_VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep -oP '"tag_name": "v\K[^"]+')
+          echo "Installing sing-box version: $SING_BOX_VERSION"
+
+          wget -O sing-box.tar.gz "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz"
+
+          tar -xzf sing-box.tar.gz
+          sudo cp sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box /usr/local/bin/
+          sudo chmod +x /usr/local/bin/sing-box
+
+          rm -rf sing-box.tar.gz sing-box-${SING_BOX_VERSION}-linux-amd64
+
+      - name: Verify sing-box installation
+        run: |
+          sing-box version
+          sing-box rule-set --help
+
+      - name: Initialize Go module
+        run: |
+          if [ ! -f go.mod ]; then
+            go mod init singbox-ruleset
+          fi
+
+      - name: Run rule converter
+        env:
+          MAXMIND_KEY: ${{ secrets.MAXMIND_KEY }}
+        run: |
+          go run main.go
+
+      - name: Check generated files
+        run: |
+          echo "Generated rule directories:"
+          ls -la rule/
+          echo "Checking for .srs files:"
+          find rule/ -name "*.srs" -type f | head -10
+          echo "Checking for .json files:"
+          find rule/ -name "*.json" -type f | head -10
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add rule/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update rule sets - $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
+
+      - name: Create release (optional)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Rule Sets v${{ github.run_number }}
+          body: |
+            Automated rule sets update
+
+            Generated at: ${{ github.event.head_commit.timestamp }}
+
+            ## Categories Updated:
+            - Advertising
+            - Global
+            - Mainland
+            - Game
+            - Apple
+            - Microsoft
+            - Google
+            - Media
+            - Reject
+            - Other
+
+          files: |
+            rule/**/*.srs
+            rule/**/*.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

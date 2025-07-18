@@ -792,32 +792,6 @@ func translateRulesByCategory() {
 			log.Printf("Failed to write JSON file %s: %v", targetFile, err)
 			continue
 		}
-		
-		
-		readmeFile := filepath.Join(categoryDir, "README.md")
-		readmeContent := fmt.Sprintf(`# %s
-
-#### 规则链接
-
-
-**Github**
-https://raw.githubusercontent.com/ll1zt/sing-box-rules/main/rule/%s/%s.srs
-
-
-#### 包含的规则
-%s`, category, category, category, category, category, strings.Join(ruleNames, ", "))
-		
-		if err := os.WriteFile(readmeFile, []byte(readmeContent), 0644); err != nil {
-			log.Printf("Failed to write README file %s: %v", readmeFile, err)
-		}
-		
-		log.Printf("Created category: %s with %d rules", category, validRuleCount)
-		processedCount++
-	}
-	
-	log.Printf("Finished processing %d categories", processedCount)
-}
-
 
 func findRuleFile(sourceFolder, ruleName string) string {
 	
